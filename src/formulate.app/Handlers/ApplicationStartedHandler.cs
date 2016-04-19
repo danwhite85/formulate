@@ -3,11 +3,14 @@
 
     // Namespaces.
     using Controllers;
+    using System;
     using System.Collections.Generic;
     using System.Configuration;
     using System.Linq;
+    using System.Timers;
     using System.Web;
     using System.Web.Configuration;
+    using System.Web.Hosting;
     using System.Web.Mvc;
     using System.Web.Routing;
     using System.Xml;
@@ -37,6 +40,31 @@
 
         private const string DeveloperSectionXPath = @"/dashBoard/section[@alias='StartupDeveloperDashboardSection']";
         private const string MissingDeveloperSection = @"Unable to locate StartupDeveloperDashboardSection in the dashboard.config. The Formulate tab will not be added to the Developer section.";
+        private const string InstallActionsError = @"An unknown error occurred while attempting to asynchronously run the install actions for Formulate.";
+
+        #endregion
+
+
+        #region Properties
+
+        private static List<Action> InstallActions { get; set; }
+        private static object InstallActionsLock { get; set; }
+        private static Timer InstallTimer { get; set; }
+
+        #endregion
+
+
+        #region Constructors
+
+        /// <summary>
+        /// Static constructor.
+        /// </summary>
+        static ApplicationStartedHandler()
+        {
+            InstallActions = new List<Action>();
+            InstallActionsLock = new object();
+            InstallTimer = null;
+        }
 
         #endregion
 
@@ -160,6 +188,9 @@
                 { "GetFieldTypes",
                     helper.GetUmbracoApiService<FieldsController>(x =>
                         x.GetFieldTypes()) },
+                { "GetHandlerTypes",
+                    helper.GetUmbracoApiService<HandlersController>(x =>
+                        x.GetHandlerTypes()) },
                 { "GetTemplates",
                     helper.GetUmbracoApiService<TemplatesController>(x =>
                         x.GetTemplates()) },
@@ -197,7 +228,14 @@
             var needsUpgrade = !Constants.Version.InvariantEquals(version);
             if (!isInstalled)
             {
+
+                // Logging.
+                LogHelper.Info<ApplicationStartedHandler>("Installing Formulate.");
+
+
+                // Install Formulate.
                 HandleInstall(applicationContext);
+
             }
             else if (needsUpgrade)
             {
@@ -244,13 +282,36 @@
         /// </param>
         private void AddSection(ApplicationContext applicationContext)
         {
-            var service = applicationContext.Services.SectionService;
-            var existingSection = service.GetByAlias("formulate");
-            if (existingSection == null)
+
+            // Queue section change.
+            QueueInstallAction(() =>
             {
-                service.MakeNew("Formulate", "formulate",
-                    "icon-formulate-clipboard", 6);
-            }
+                var service = applicationContext.Services.SectionService;
+                var existingSection = service.GetByAlias("formulate");
+                if (existingSection == null)
+                {
+
+                    // Logging.
+                    LogHelper.Info<ApplicationStartedHandler>("Installing Formulate section in applications.config.");
+
+
+                    // Variables.
+                    var doc = new XmlDocument();
+                    var actionXml = Resources.TransformApplications;
+                    doc.LoadXml(actionXml);
+
+
+                    // Add to applications.
+                    PackageAction.RunPackageAction("Formulate",
+                        "Formulate.TransformXmlFile", doc.FirstChild);
+
+
+                    // Logging.
+                    LogHelper.Info<ApplicationStartedHandler>("Done installing Formulate section in applications.config.");
+
+                }
+            });
+
         }
 
 
@@ -259,15 +320,34 @@
         /// </summary>
         private void AddDashboard()
         {
-            var exists = DashboardExists();
-            if (!exists)
+
+            // Queue dashboard transformation.
+            QueueInstallAction(() =>
             {
-                var doc = new XmlDocument();
-                var actionXml = Resources.AddDashboard;
-                doc.LoadXml(actionXml);
-                PackageAction.RunPackageAction("Formulate",
-                    "addDashboardSection", doc.FirstChild);
-            }
+                var exists = DashboardExists();
+                if (!exists)
+                {
+
+                    // Logging.
+                    LogHelper.Info<ApplicationStartedHandler>("Installing Formulate dashboard.");
+
+
+                    // Variables.
+                    var doc = new XmlDocument();
+                    var actionXml = Resources.TransformDashboard;
+                    doc.LoadXml(actionXml);
+
+
+                    // Add dashboard.
+                    PackageAction.RunPackageAction("Formulate",
+                        "Formulate.TransformXmlFile", doc.FirstChild);
+
+                    // Logging.
+                    LogHelper.Info<ApplicationStartedHandler>("Done installing Formulate dashboard.");
+
+                }
+            });
+
         }
 
 
@@ -316,40 +396,57 @@
         /// </summary>
         private void AddFormulateDeveloperTab()
         {
-            var exists = FormulateDeveloperTabExists();
-            if (!exists)
+
+            // Queue dashboard change.
+            QueueInstallAction(() =>
             {
-
-                // Get developer section from Dashboard.config.
-                var dashboardPath = SystemFiles.DashboardConfig;
-                var dashboardDoc = XmlHelper.OpenAsXmlDocument(dashboardPath);
-                var devSection = dashboardDoc.SelectSingleNode(
-                    DeveloperSectionXPath);
-
-
-                // If the developer section isn't found, log a warning and
-                // skip adding tab.
-                if (devSection == null)
+                var exists = FormulateDeveloperTabExists();
+                if (!exists)
                 {
-                    LogHelper.Warn<ApplicationStartedHandler>(
-                        MissingDeveloperSection);
-                    return;
+
+                    // Logging.
+                    LogHelper.Info<ApplicationStartedHandler>("Installing Formulate developer tab.");
+
+
+                    // Variables.
+                    var dashboardPath = SystemFiles.DashboardConfig;
+                    var mappedDashboardPath = IOHelper.MapPath(dashboardPath);
+
+
+                    // Get developer section from Dashboard.config.
+                    var dashboardDoc = XmlHelper.OpenAsXmlDocument(dashboardPath);
+                    var devSection = dashboardDoc.SelectSingleNode(
+                        DeveloperSectionXPath);
+
+
+                    // If the developer section isn't found, log a warning and
+                    // skip adding tab.
+                    if (devSection == null)
+                    {
+                        LogHelper.Warn<ApplicationStartedHandler>(
+                            MissingDeveloperSection);
+                        return;
+                    }
+
+
+                    // Load tab into developer section.
+                    var tempDoc = new XmlDocument();
+                    var newNode = XmlHelper.ImportXmlNodeFromText(
+                        Resources.FormulateTab, ref tempDoc);
+                    newNode = dashboardDoc.ImportNode(newNode, true);
+                    devSection.AppendChild(newNode);
+
+
+                    // Save new Dashboard.config.
+                    dashboardDoc.Save(mappedDashboardPath);
+
+
+                    // Logging.
+                    LogHelper.Info<ApplicationStartedHandler>("Done installing Formulate developer tab.");
+
                 }
+            });
 
-
-                // Load tab into developer section.
-                var tempDoc = new XmlDocument();
-                var newNode = XmlHelper.ImportXmlNodeFromText(
-                    Resources.FormulateTab, ref tempDoc);
-                newNode = dashboardDoc.ImportNode(newNode, true);
-                devSection.AppendChild(newNode);
-
-
-                // Save new Dashboard.config.
-                var mappedDashboardPath = IOHelper.MapPath(dashboardPath);
-                dashboardDoc.Save(mappedDashboardPath);
-
-            }
         }
 
 
@@ -359,22 +456,36 @@
         private void EnsureVersion()
         {
 
-            // Variables.
-            var key = SettingConstants.VersionKey;
-            var config = WebConfigurationManager.OpenWebConfiguration("~");
-            var settings = config.AppSettings.Settings;
-
-
-            // Remove existing version setting.
-            if (settings.AllKeys.Any(x => key.InvariantEquals(x)))
+            // Queue the web.config change.
+            QueueInstallAction(() =>
             {
-                settings.Remove(key);
-            }
+
+                // Logging.
+                LogHelper.Info<ApplicationStartedHandler>("Ensuring Formulate version in the web.config.");
 
 
-            // Add version setting.
-            settings.Add(key, Constants.Version);
-            config.Save();
+                // Variables.
+                var key = SettingConstants.VersionKey;
+                var config = WebConfigurationManager.OpenWebConfiguration("~");
+                var settings = config.AppSettings.Settings;
+
+
+                // Remove existing version setting.
+                if (settings.AllKeys.Any(x => key.InvariantEquals(x)))
+                {
+                    settings.Remove(key);
+                }
+
+
+                // Add version setting.
+                settings.Add(key, Constants.Version);
+                config.Save();
+
+
+                // Logging.
+                LogHelper.Info<ApplicationStartedHandler>("Done ensuring Formulate version in the web.config.");
+
+            });
 
         }
 
@@ -417,28 +528,110 @@
         private void AddConfigurationGroup()
         {
 
-            // Does the section group already exist?
-            var config = WebConfigurationManager.OpenWebConfiguration("~");
-            var groupName = "formulateConfiguration";
-            var group = config.GetSectionGroup(groupName);
-            var exists = group != null;
-
-
-            // Only add the group if it doesn't exist.
-            if (!exists)
+            // Queue web.config change to add Formulate configuration.
+            QueueInstallAction(() =>
             {
 
-                // Variables.
-                var doc = new XmlDocument();
-                var actionXml = Resources.TransformWebConfig;
-                doc.LoadXml(actionXml);
+                // Does the section group already exist?
+                var config = WebConfigurationManager.OpenWebConfiguration("~");
+                var groupName = "formulateConfiguration";
+                var group = config.GetSectionGroup(groupName);
+                var exists = group != null;
 
 
-                // Grant access permission.
-                PackageAction.RunPackageAction("Formulate",
-                    "Formulate.TransformXmlFile", doc.FirstChild);
+                // Only add the group if it doesn't exist.
+                if (!exists)
+                {
 
+                    // Logging.
+                    LogHelper.Info<ApplicationStartedHandler>("Adding Formulate config to the web.config.");
+
+
+                    // Variables.
+                    var doc = new XmlDocument();
+                    var actionXml = Resources.TransformWebConfig;
+                    doc.LoadXml(actionXml);
+
+
+                    // Add configuration group.
+                    PackageAction.RunPackageAction("Formulate",
+                        "Formulate.TransformXmlFile", doc.FirstChild);
+
+
+                    // Logging.
+                    LogHelper.Info<ApplicationStartedHandler>("Done adding Formulate config to the web.config.");
+
+                }
+
+            });
+
+        }
+
+
+        /// <summary>
+        /// Queues an install action to be run in a few seconds.
+        /// </summary>
+        /// <param name="action">
+        /// The install action.
+        /// </param>
+        private void QueueInstallAction(Action action)
+        {
+            lock (InstallActionsLock)
+            {
+                InstallActions.Add(action);
+                if (InstallTimer == null)
+                {
+                    var twentySeconds = 1000 * 20;
+                    InstallTimer = new Timer(twentySeconds);
+                    InstallTimer.AutoReset = false;
+                    InstallTimer.Elapsed += HandleInstallTimerElapsed;
+                    InstallTimer.Start();
+                }
             }
+        }
+
+
+        /// <summary>
+        /// Once the install timer elapses, run the install actions.
+        /// </summary>
+        private void HandleInstallTimerElapsed(object sender, ElapsedEventArgs e)
+        {
+
+            // Logging.
+            LogHelper.Info<ApplicationStartedHandler>("Running the queue of Formulate install actions.");
+
+
+            // Queueing this way should avoid application pool recycles during the install process,
+            // which will ensure that only one application pool recyle occurs, even if there are multiple
+            // configuration changes made.
+            HostingEnvironment.QueueBackgroundWorkItem(token =>
+            {
+                lock (InstallActionsLock)
+                {
+                    try
+                    {
+                        InstallActions.ForEach(x =>
+                            x()
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        LogHelper.Error<ApplicationStartedHandler>(InstallActionsError, ex);
+                    }
+                    finally
+                    {
+
+                        // Reset queue.
+                        InstallTimer = null;
+                        InstallActions = new List<Action>();
+
+
+                        // Logging.
+                        LogHelper.Info<ApplicationStartedHandler>("Done running the queue of Formulate install actions.");
+
+                    }
+                }
+            });
 
         }
 

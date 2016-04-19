@@ -1,7 +1,7 @@
 ﻿// Variables.
 var app = angular.module("umbraco");
 
-// Associate directive/controller.
+// Associate directive.
 app.directive("formulateValidationRegex", directive);
 
 // Directive.

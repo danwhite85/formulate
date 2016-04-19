@@ -2,15 +2,16 @@
 {
 
     // Namespaces.
-    using app.Managers;
-    using app.Persistence;
-    using app.Resolvers;
     using core.Extensions;
     using core.Types;
+    using Managers;
+    using Persistence;
+    using Resolvers;
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using ResolverConfig = app.Resolvers.Configuration;
+    using Validations;
+    using ResolverConfig = Resolvers.Configuration;
 
 
     /// <summary>
@@ -110,6 +111,7 @@
                 if (form != null)
                 {
                     var definition = new FormDefinition();
+                    definition.FormId = form.Id;
                     definition.Name = form.Name;
                     definition.Alias = form.Alias;
                     var fields = new List<FieldDefinition>();
@@ -118,6 +120,11 @@
                     {
                         var validations = field.Validations
                             .Select(x => Validations.Retrieve(x)).WithoutNulls();
+                        var context = new ValidationContext()
+                        {
+                            Field = field,
+                            Form = form
+                        };
                         var newField = new FieldDefinition()
                         {
                             Alias = field.Alias,
@@ -129,7 +136,7 @@
                             Validations = validations.Select(x => new ValidationDefinition()
                             {
                                 Alias = x.Alias,
-                                Configuration = x.DeserializeConfiguration(),
+                                Configuration = x.DeserializeConfiguration(context),
                                 Id = x.Id,
                                 Name = x.Name,
                                 ValidationType = x.GetValidationKind().GetType()

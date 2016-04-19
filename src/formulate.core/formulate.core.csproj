@@ -9,8 +9,9 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>formulate.core</RootNamespace>
     <AssemblyName>formulate.core</AssemblyName>
-    <TargetFrameworkVersion>v4.5.1</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -46,9 +47,13 @@
     <Compile Include="Extensions\StringExtensions.cs" />
     <Compile Include="Models\FormViewModel.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Types\AllowEmail.cs" />
     <Compile Include="Types\FieldDefinition.cs" />
+    <Compile Include="Types\FieldSubmission.cs" />
     <Compile Include="Types\FormDefinition.cs" />
     <Compile Include="Types\LayoutDefinition.cs" />
+    <Compile Include="Types\SubmissionOptions.cs" />
+    <Compile Include="Types\SubmissionResult.cs" />
     <Compile Include="Types\ValidationDefinition.cs" />
     <Compile Include="Utilities\FileUtility.cs" />
   </ItemGroup>

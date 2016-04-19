@@ -49,6 +49,12 @@
                 case "dropdownfield":
                     angularType = "select";
                     break;
+                case "buttonfield":
+                    angularType = "submit";
+                    break;
+                case "textareafield":
+                    angularType = "textarea";
+                    break;
             }
             return angularType ?? fieldType;
         }

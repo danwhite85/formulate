@@ -1,10 +1,17 @@
 # Progress / Status
-Nearing alpha. Just a few dozen commits until Formulate is fully functional.
+Alpha. Formulate is fully functional and early adopters can begin using it now.
+
+![Formulate](assets/images/formulate-icon-zoomed-out.png?raw=true "Formulate")
 
 # Formulate Overview
-A form builder for Umbraco.
+A form builder for Umbraco. More info here: [www.formulate.rocks](http://www.formulate.rocks/)
 
 ![Formulate](assets/images/formulate.png?raw=true "Formulate")
+
+# Contributors
+These are some of the people who have made Formulate possible:
+* Nicholas Westby - Rhythm Agency - [nicholaswestby.com](http://www.nicholaswestby.com/)
+* Josef Kohout - Rhythm Agency - [rhythmagency.com](http://rhythmagency.com/leadership?idoeverything=Josef.Kohout)
 
 # Contributing
 Requires:
@@ -41,4 +48,10 @@ Each project is built into an assembly, and each assembly has a different purpos
 * **formulate.app**: This is the main core of Formulate. It contains all of the functionality necessary for the back office to work.
 * **formulate.core**: This contains some basic functionality shared by all of the assemblies.
 * **formulate.meta**: This contains information about Formulate (e.g., version number). Used primarily during the build process.
-* **Website**: This is a sample website for developers who wish to contribute to the Formualte codebase. The binary is not part of the packaged releases, though a few of the files it contains are (e.g., some CSHTML, config, and XDT files).
+* **Website**: This is a sample website for developers who wish to contribute to the Formulate codebase. The binary is not part of the packaged releases, though a few of the files it contains are (e.g., some CSHTML, config, and XDT files).
+
+# Thanks
+Thanks to the creators of the following Umbraco packages, which served as excellent points of reference while building Formulate:
+* [Archetype](https://github.com/imulus/Archetype)
+* [Umbraco Bookshelf](https://github.com/kgiszewski/UmbracoBookshelf)
+* [Merchello](https://github.com/Merchello/Merchello)
